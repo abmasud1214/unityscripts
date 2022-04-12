@@ -12,6 +12,8 @@ public class BoidController : MonoBehaviour
     private GameObject[] boids;
     private Vector3 velocity;
 
+    private Vector3[] fibonacci_dir;
+
     private float maxSpeed = 5f;
     private float maxForce = 1f;
 
@@ -22,6 +24,8 @@ public class BoidController : MonoBehaviour
         boids = new GameObject[] {boid1, boid2, boid3, boid4};
         rb = GetComponent<Rigidbody>();
         rb.velocity = new Vector3(0, 0, 5);
+
+        fibonacci_dir = fibonacci_sphere();
     }
 
     // Update is called once per frame
@@ -32,6 +36,16 @@ public class BoidController : MonoBehaviour
 
     void FixedUpdate() {
         Vector3 acc = steer();
+
+        if (collisionCourse()){
+            Debug.Log("Collision Course");
+            Vector3 collisionDir = viableDir();
+            Vector3 avoidAcc = Vector3.Normalize(acc) * maxSpeed;
+            avoidAcc -= rb.velocity;
+            avoidAcc = Vector3.ClampMagnitude(avoidAcc, maxForce) * 5;
+            acc += avoidAcc;
+        }
+
         rb.AddForce(acc, ForceMode.Acceleration);
         transform.LookAt(transform.position + rb.velocity);
     }
@@ -94,5 +108,47 @@ public class BoidController : MonoBehaviour
         acc = Vector3.ClampMagnitude(acc, maxForce);
 
         return acc;
+    }
+
+    private bool collisionCourse() {
+        Ray ray = new Ray(this.transform.position, this.transform.forward);
+        return Physics.SphereCast(ray, 0.5f, 3f);
+    }
+
+    private Vector3 viableDir() {
+        Vector3[] dir = fibonacci_dir;
+
+        Transform t = this.transform;
+        for (int i = 0; i < dir.Length; i++) {
+            Vector3 d = t.TransformDirection(dir[i]);
+            Ray ray = new Ray(t.position, d);
+            if (!(Physics.SphereCast(ray, 0.5f, 3f))){ // TODO: Add parameters for hit radius and maxdistance and add layermask
+                return d;
+            }
+        }
+
+        return t.forward;
+    }
+
+    private Vector3[] fibonacci_sphere(){
+        Vector3[] dir = new Vector3[300];
+        int SAMPLES = 300;
+
+        float phi = Mathf.PI * (3f - Mathf.Sqrt(5f));
+
+        for (int i = 0; i < SAMPLES; i++){
+            float y = 1 - (i / (SAMPLES - 1)) * 2;
+            float radius = Mathf.Sqrt(1 - y * y);
+
+            float theta = phi * i;
+
+            float x = Mathf.Cos(theta) * radius;
+            float z = Mathf.Sin(theta) * radius;
+
+            Vector3 d = new Vector3(x, y, z);
+            dir[i] = d;
+        }
+
+        return dir;
     }
 }
