@@ -4,26 +4,25 @@ using UnityEngine;
 
 public class BoidController : MonoBehaviour
 {
-    [SerializeField] GameObject boid1;
-    [SerializeField] GameObject boid2;
-    [SerializeField] GameObject boid3;
-    [SerializeField] GameObject boid4;
+    [SerializeField] float viewRadius = 5f;
+    [SerializeField] float viewAngle = 80f;
 
-    private GameObject[] boids;
+    // private GameObject[] boids;
+    private List<GameObject> boids;
     private Vector3 velocity;
 
     private Vector3[] fibonacci_dir;
 
-    private float maxSpeed = 5f;
-    private float maxForce = 1f;
+    private float maxSpeed = .2f;
+    private float maxForce = .5f;
 
     private Rigidbody rb;
     // Start is called before the first frame update
     void Start()
     {
-        boids = new GameObject[] {boid1, boid2, boid3, boid4};
         rb = GetComponent<Rigidbody>();
         rb.velocity = new Vector3(0, 0, 5);
+        velocity = rb.velocity;
 
         fibonacci_dir = fibonacci_sphere();
     }
@@ -35,78 +34,77 @@ public class BoidController : MonoBehaviour
     }
 
     void FixedUpdate() {
-        Vector3 acc = steer();
-
-        if (collisionCourse()){
-            Debug.Log("Collision Course");
-            Vector3 collisionDir = viableDir();
-            Vector3 avoidAcc = Vector3.Normalize(acc) * maxSpeed;
-            avoidAcc -= rb.velocity;
-            avoidAcc = Vector3.ClampMagnitude(avoidAcc, maxForce) * 5;
-            acc += avoidAcc;
+        LayerMask m = LayerMask.GetMask("Boid");
+        boids = new List<GameObject>();
+        Collider[] boidColliders = Physics.OverlapSphere(transform.position, viewRadius, m);
+        foreach (Collider c in boidColliders){
+            GameObject b = c.gameObject;
+            b = b.transform.parent.gameObject;
+            float ang = Vector3.Angle(transform.forward, b.transform.position - transform.position);
+            if (ang < viewAngle) {
+                boids.Add(b);
+            }
         }
+        if (boids.Count > 0) {
 
-        rb.AddForce(acc, ForceMode.Acceleration);
-        transform.LookAt(transform.position + rb.velocity);
+            Vector3 acc = steer();
+
+            if (collisionCourse()){
+                Debug.Log("Collision Course");
+                Vector3 collisionDir = viableDir();
+                Vector3 avoidAcc = Vector3.Normalize(collisionDir) * maxSpeed;
+                avoidAcc -= rb.velocity;
+                avoidAcc = Vector3.ClampMagnitude(avoidAcc, maxForce) * 5;
+                acc += avoidAcc;
+            }
+
+            rb.AddForce(acc, ForceMode.Acceleration);
+            // rb.velocity = Vector3.ClampMagnitude(rb.velocity, maxSpeed);
+            transform.LookAt(transform.position + rb.velocity);
+        }
     }
 
     private Vector3 steer(){
         Vector3 acc = Vector3.zero;
 
-        acc = align() + cohesion() + seperation();
-        return acc;
-    }
-
-    private Vector3 align(){
-        Vector3 acc = new Vector3(0, 0, 0);
-        for(int i = 0; i < boids.Length; i++) {
+        Vector3 align = Vector3.zero;
+        Vector3 cohesion = Vector3.zero;
+        Vector3 seperation = Vector3.zero;
+        for (int i = 0; i < boids.Count; i++){
             GameObject b = boids[i];
             Rigidbody rbo = b.GetComponent<Rigidbody>();
+
+            // Align
             Vector3 v = rbo.velocity;
-            acc = acc + v;
-        }
+            align += v;
 
-        acc = acc / 4;
-        acc = Vector3.Normalize(acc) * maxSpeed;
-        acc = acc - rb.velocity;
-        acc = Vector3.ClampMagnitude(acc, maxForce);
-
-        return acc;
-    }
-
-    private Vector3 cohesion(){
-        Vector3 pos = new Vector3(0, 0, 0);
-        for(int i = 0; i < boids.Length; i++) {
-            GameObject b = boids[i];
-            Rigidbody rbo = b.GetComponent<Rigidbody>();
+            // Cohesion
             Vector3 p = rbo.position;
-            pos += p;
-        }
+            cohesion += p;
 
-        pos = pos / 4;
-        pos -= rb.position;
-        pos = Vector3.Normalize(pos) * maxSpeed;
-        pos -= rb.velocity;
-        pos = Vector3.ClampMagnitude(pos, maxForce);
-
-        return pos;
-    }
-
-    private Vector3 seperation(){
-        Vector3 acc = Vector3.zero;
-        for(int i = 0; i < boids.Length; i++) {
-            GameObject b = boids[i];
-            Rigidbody rbo = b.GetComponent<Rigidbody>();
+            // Seperation
             Vector3 diff = rb.position - rbo.position;
             diff = Vector3.Normalize(diff);
-            acc += diff;
+            cohesion += diff;
         }
-        
-        acc /= 4;
-        acc = Vector3.Normalize(acc) * 4;
-        acc -= rb.velocity;
-        acc = Vector3.ClampMagnitude(acc, maxForce);
 
+        align = align / boids.Count;
+        align = Vector3.Normalize(align) * maxSpeed;
+        align -= rb.velocity;
+        align = Vector3.ClampMagnitude(acc, maxForce);
+
+        cohesion = cohesion / boids.Count;
+        cohesion -= rb.position;
+        cohesion = Vector3.Normalize(cohesion) * maxSpeed;
+        cohesion -= rb.velocity;
+        cohesion = Vector3.ClampMagnitude(cohesion, maxForce);
+
+        seperation /= 4;
+        seperation = Vector3.Normalize(acc) * 4;
+        seperation -= rb.velocity;
+        seperation = Vector3.ClampMagnitude(acc, maxForce);
+
+        acc = align + cohesion + seperation;
         return acc;
     }
 
